@@ -1,2 +1,2 @@
 # Mailbox
-A C Unix Mailing System for Interprocess Communication
+A Unix Shared Memory Mailing System for Interprocess Communication

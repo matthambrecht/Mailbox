@@ -6,6 +6,9 @@ client_1:
 client_2:
 	$(CC) $(CFLAGS) client_2.c -o client_2
 
+test:
+	$(CC) $(CFLAGS) test.c -o test
+
 all: client_1 client_2
 
 clean:

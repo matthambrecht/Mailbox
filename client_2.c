@@ -2,11 +2,7 @@
 #include "mailbox.h"
 
 int main() {
-    struct Mailbox *mb = init_mailbox("ooga2");
-    char * out;
+    struct office *of = init_office("ooga2", 1);
     
-    out = read_mb(mb);
-    printf("%s", out);
-
     return 0;
 }

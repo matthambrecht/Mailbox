@@ -15,41 +15,109 @@ mailbox.h - A Unix Shared Memory Mailing System for IPC
 #include <unistd.h>
 #include <errno.h>
 
-#define MAX_OF 24 // Max number of officees
+// Error codes
+#define MB_SUCCESS 0
+#define MB_EMPTY 10
+#define MB_FULL 11
+#define MB_NOT_FOUND 12
+#define MB_MEM_ERR 13
+#define MB_BAD_ID 14
+#define MB_EEXIST 15
 
-struct node {
-    struct node * next;
-    struct node * prev;
-    void * content;
-};
+// Config consts
+#define MAX_MB 24 // Max number of processes capable of having a mailbox
+#define MAX_Q_LEN 64 // Max amount of mail per mailbox
 
-struct queue {
-    size_t length;
-    struct node * head;
+typedef struct {
+    char msg_buff[256];
+    size_t msg_len;
+} M; 
+
+// Our distribution center types
+struct mailbox {
+    M objs[MAX_Q_LEN];
+    size_t len;
+    unsigned int front;
+    unsigned int back;
 };
 
 struct office {
-    int vacant[MAX_OF];
-    sem_t sem[MAX_OF];
-    char buff[MAX_OF];
-    void * queue[MAX_OF];
+    unsigned int vacant[MAX_MB];
+    sem_t sem[MAX_MB];
+    char buff[MAX_MB];
+    struct mailbox mb[MAX_MB];
     size_t procs;
 };
 
-void check_perr(int fail, const char * e_msg) { // for errors something else caught
+// error handlers
+void check_perr(int fail);
+
+// queue fn declarations
+struct mailbox mb_init();
+int mb_insert(struct mailbox * mb, M * mail);
+M * mb_pop(struct mailbox * mb);
+int mb_full(struct mailbox * mb);
+int mb_empty(struct mailbox * mb);
+
+// office fn declarations
+struct office * connect(char * key, const unsigned int box_id);
+struct office * init_office(char * key, const unsigned int box_id);
+int rem_proc(struct office * of, const unsigned int box_id);
+int add_proc(struct office * of, const unsigned int box_id);
+int send_mail(struct office * of, const unsigned int box_id, M * mail);
+M * check_mail(struct office * of, const unsigned int box_id);
+
+// Error handling stuff
+void check_perr(int fail) { // for errors something else caught
     if (fail) {
-        perror(e_msg);
-        exit(EXIT_FAILURE);
+        exit(EIO);
     }
 }
 
-int check_err(int fail, const char * e_msg) { // for errors we caught
-    if (fail) {
-        fprintf(stderr, "%s\n", e_msg);
-        return -1;
+// Mailbox queue stuff
+struct mailbox mb_init() {
+    struct mailbox q;
+    
+    q.len = 0;
+    q.front = 0;
+    q.back = 0;
+
+    return q;
+};
+
+int mb_insert(struct mailbox * mb, M * mail) {
+    if (mb_full(mb)) {
+        return MB_FULL;
     }
+
+    mb->objs[mb->back] = *mail;
+    mb->back = (mb->back + 1) % MAX_Q_LEN;
+    mb->len++;
+
+    return MB_SUCCESS;
 }
 
+M * mb_pop(struct mailbox * mb) {
+    if (mb_empty(mb)) {
+        return NULL;
+    }
+
+    M * out = &mb->objs[mb->front];
+    mb->front = (mb->front + 1) % MAX_Q_LEN;
+    mb->len--;
+
+    return out;
+}
+
+int mb_empty(struct mailbox * mb) {
+    return !mb->len;
+}
+
+int mb_full(struct mailbox * mb) {
+    return mb->len == MAX_Q_LEN;
+}
+
+// Office state stuff
 struct office * connect(char * key, const unsigned int box_id) { // connect to existing
     unsigned int fd;
     struct office * of;
@@ -59,10 +127,8 @@ struct office * connect(char * key, const unsigned int box_id) { // connect to e
         O_RDWR,
         0
     );
-    
 
-    check_perr(fd == -1, "Failed to connect to existing office");
-
+    check_perr(fd == -1);
     of = (struct office *) mmap(
         NULL,
         sizeof(*of),
@@ -72,7 +138,7 @@ struct office * connect(char * key, const unsigned int box_id) { // connect to e
         0
     );
 
-    check_perr(fd == -1, "Failed to connect to existing office");
+    check_perr(fd == -1);
     add_proc(of, box_id);
 
     return of;
@@ -93,10 +159,10 @@ struct office * init_office(char * key, const unsigned int box_id) {
             return connect(key, box_id);
         }
 
-        check_perr(-1, "Failed to open shared memory for office");
+        check_perr(-1);
     }
 
-    check_perr(ftruncate(fd, sizeof(struct office)) == -1, "Failure sizing office");
+    check_perr(ftruncate(fd, sizeof(struct office)) == -1);
 
     of = (struct office *) mmap(
         NULL,
@@ -107,16 +173,15 @@ struct office * init_office(char * key, const unsigned int box_id) {
         0
     );
 
-    check_perr(of == MAP_FAILED, "Couldn't map file to shared memory");
+    check_perr(of == MAP_FAILED);
     check_perr(sem_init(
-        &of->sem,
+        of->sem,
         1,
         0
-    ) == -1, "Failed to initialize semaphore");
+    ) == -1);
     
-    for (int i = 0; i < MAX_OF; i++) { // init free vars
+    for (int i = 0; i < MAX_MB; i++) { // init free vars
         of->vacant[i] = 1;
-        of->queue[i] = NULL;
     }
     
     add_proc(of, box_id);
@@ -125,52 +190,70 @@ struct office * init_office(char * key, const unsigned int box_id) {
 }
 
 int rem_proc(struct office * of, const unsigned int box_id) {
-    if (check_err(box_id >= MAX_OF || of->vacant[box_id],
-        "Attempted to remove invalid mailbox")) {
-        return -1;
+    if (box_id >= MAX_MB) {
+        return MB_BAD_ID;
+    }
+
+    if (of->vacant[box_id]) {
+        return MB_NOT_FOUND;
     }
 
     sem_wait(&of->sem[box_id]);
     sem_close(&of->sem[box_id]);
-    of->sem[box_id];
     of->procs--;
     of->vacant[box_id] = 1;
 
-    return 1;
+    return MB_SUCCESS;
 }
 
 int add_proc(struct office * of, const unsigned int box_id) {
-    if (check_err(box_id >= MAX_OF || !of->vacant[box_id],
-        "Attempted to add invalid mailbox")) {
-        return -1;
+    if (box_id >= MAX_MB) {
+        return MB_BAD_ID;
     }
 
+    if (!of->vacant[box_id]) {
+        return MB_EEXIST;
+    }
+
+    struct mailbox mb = mb_init();
     sem_init(&of->sem[box_id], 0, 1);
+    of->mb[box_id] = mb;
     of->procs++;
-    of->vacant[box_id] ^= of->vacant[box_id];
+    of->vacant[box_id] = 0;
 
-    return 1;
+    return MB_SUCCESS;
 }
 
-void write_proc(struct office * of, const char * msg) {
-    of->procs = strlen(msg);
-
-    for (size_t j = 0; j < of->procs; j++) {
-        of->buff[j] = msg[j];
+// Message passing stuff
+int send_mail(struct office * of, const unsigned int box_id, M * mail) {
+    if (box_id >= MAX_MB) {
+        return MB_BAD_ID;
+    }
+    
+    if (of->vacant[box_id]) {
+        return MB_NOT_FOUND;
     }
 
-    sem_post(&of->sem);
+    sem_wait(&of->sem[box_id]);
+    int rv = mb_insert(&of->mb[box_id], mail);
+    sem_post(&of->sem[box_id]);
+
+    return rv;
 }
 
-char * read_of(struct office * of) {
-    char buff[MAX_OF];
+M * check_mail(struct office * of, const unsigned int box_id) {
+    if (box_id >= MAX_MB) {
+        return MB_BAD_ID;
+    }
+    
+    if (of->vacant[box_id]) {
+        return MB_NOT_FOUND;
+    }
 
-    sem_wait(&of->sem);
-    memcpy(buff, of->buff, of->procs);
-    of->procs = 0;
-    sem_post(&of->sem);
+    sem_wait(&of->sem[box_id]);
+    M * out = mb_pop(&of->mb[box_id]);
+    sem_post(&of->sem[box_id]);
 
-    return of->buff;
+    return out;
 }
-
 #endif

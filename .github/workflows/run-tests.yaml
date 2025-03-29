@@ -1,4 +1,4 @@
-name: run-tests
+name: Unit Tests
 run-name: Library Unit Tests
 on: 
   workflow_dispatch:

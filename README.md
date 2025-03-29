@@ -1,4 +1,5 @@
 # Mailbox - A POSIX Shared Memory Multi-Directional Message Queue
+[![Unit Tests](https://github.com/matthambrecht/Mailbox/actions/workflows/run-tests.yaml/badge.svg)](https://github.com/matthambrecht/Mailbox/actions/workflows/run-tests.yaml)
 This is a C library to facilitate IPC (interprocess communication) allowing
 multi-directional message sharing. It is designed to mimic the organization of postal systems. Made to be thread-safe using POSIX `semaphore.h`.
 

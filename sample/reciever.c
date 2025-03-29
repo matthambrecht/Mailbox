@@ -12,6 +12,8 @@ int main() {
             printf("%s\n", o->msg_buff);
         }
     }
+
+    destroy_office("sample_mb");
     
     return 0;
 }

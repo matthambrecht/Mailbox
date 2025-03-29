@@ -42,6 +42,7 @@ struct mailbox {
 };
 
 struct office {
+    char * key;
     unsigned int vacant[MAX_MB];
     sem_t mutex[MAX_MB];
     sem_t notif[MAX_MB];
@@ -63,11 +64,13 @@ int mb_empty(struct mailbox * mb);
 // office fn declarations
 struct office * connect(char * key, const unsigned int box_id);
 struct office * init_office(char * key, const unsigned int box_id);
-int rem_proc(struct office * of, const unsigned int box_id);
-int add_proc(struct office * of, const unsigned int box_id);
+void destroy_office(const char * key);
+int remove_mailbox(struct office * of, const unsigned int box_id);
+int add_mailbox(struct office * of, const unsigned int box_id);
 int send_mail(struct office * of, const unsigned int box_id, M * mail);
 M * check_mail(struct office * of, const unsigned int box_id);
 M * await_mail(struct office * of, const unsigned int box_id);
+
 
 // Error handling stuff
 void check_perr(int fail) { // for errors something else caught
@@ -75,6 +78,7 @@ void check_perr(int fail) { // for errors something else caught
         exit(EIO);
     }
 }
+
 
 // Mailbox queue stuff
 struct mailbox mb_init() {
@@ -86,6 +90,7 @@ struct mailbox mb_init() {
 
     return q;
 };
+
 
 int mb_insert(struct mailbox * mb, M * mail) {
     if (mb_full(mb)) {
@@ -99,6 +104,7 @@ int mb_insert(struct mailbox * mb, M * mail) {
     return MB_SUCCESS;
 }
 
+
 M * mb_pop(struct mailbox * mb) {
     if (mb_empty(mb)) {
         return NULL;
@@ -111,13 +117,16 @@ M * mb_pop(struct mailbox * mb) {
     return out;
 }
 
+
 int mb_empty(struct mailbox * mb) {
     return !mb->len;
 }
 
+
 int mb_full(struct mailbox * mb) {
     return mb->len == MAX_Q_LEN;
 }
+
 
 // Office state stuff
 struct office * connect(char * key, const unsigned int box_id) { // connect to existing
@@ -141,10 +150,11 @@ struct office * connect(char * key, const unsigned int box_id) { // connect to e
     );
 
     check_perr(fd == -1);
-    add_proc(of, box_id);
+    add_mailbox(of, box_id);
 
     return of;
 }
+
 
 struct office * init_office(char * key, const unsigned int box_id) {
     unsigned int fd;
@@ -177,18 +187,26 @@ struct office * init_office(char * key, const unsigned int box_id) {
 
     check_perr(of == MAP_FAILED);
     
+    of->key = key;
+
     for (int i = 0; i < MAX_MB; i++) { // init free vars
         sem_init(&of->notif[i], 1, 0);
         sem_init(&of->mutex[i], 1, 1);
         of->vacant[i] = 1;
     }
     
-    add_proc(of, box_id);
+    add_mailbox(of, box_id);
 
     return of;
 }
 
-int rem_proc(struct office * of, const unsigned int box_id) {
+
+void destroy_office(const char * key) {
+    shm_unlink(key);
+}
+
+
+int remove_mailbox(struct office * of, const unsigned int box_id) {
     if (box_id >= MAX_MB) {
         return MB_BAD_ID;
     }
@@ -202,10 +220,15 @@ int rem_proc(struct office * of, const unsigned int box_id) {
     of->procs--;
     of->vacant[box_id] = 1;
 
+    if (of->procs) {
+        destroy_office(of->key);
+    }
+
     return MB_SUCCESS;
 }
 
-int add_proc(struct office * of, const unsigned int box_id) {
+
+int add_mailbox(struct office * of, const unsigned int box_id) {
     if (box_id >= MAX_MB) {
         return MB_BAD_ID;
     }
@@ -222,6 +245,7 @@ int add_proc(struct office * of, const unsigned int box_id) {
 
     return MB_SUCCESS;
 }
+
 
 // Message passing stuff
 int send_mail(struct office * of, const unsigned int box_id, M * mail) {
@@ -240,6 +264,7 @@ int send_mail(struct office * of, const unsigned int box_id, M * mail) {
 
     return rv;
 }
+
 
 M * check_mail(struct office * of, const unsigned int box_id) {
     if (box_id >= MAX_MB) {
@@ -260,6 +285,7 @@ M * check_mail(struct office * of, const unsigned int box_id) {
 
     return out;
 }
+
 
 M * await_mail(struct office * of, const unsigned int box_id) {
     if (box_id >= MAX_MB) {

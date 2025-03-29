@@ -42,6 +42,17 @@ To check your mail you need your "post office" and "post address" of the current
 M * check_mail(struct office * of, const unsigned int box_id);
 ```
 
+### Cleanup Functions
+To remove a mailbox it is suggested that you add a call to `remove_mailbox` when you are done with the mailbox in a process, or before said process dies. This will ensure that when all references are gone, the shared memory chunk will be destroyed, this function is defined as follows:
+```c
+int remove_mailbox(struct office * of, const unsigned int box_id);
+```
+
+If you're using this in a client-server fashion, or just need to manually destroy the entire shared memory, use the `destroy_office` function with the key you initialized the offices with. The function is defined as follows:
+```c
+void destroy_office(const char * key);
+```
+
 ### Simple Server and Client
 To wait for new mail for an unknown amount of time we can use:
 ```c

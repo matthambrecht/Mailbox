@@ -1,6 +1,9 @@
 # Mailbox - A POSIX Shared Memory Multi-Directional Message Queue
-This is simple C a library to facilitate IPC (interprocess communication) allowing
-multi-directional message sharing, similar to that of a standard mailing system.
+This is a C library to facilitate IPC (interprocess communication) allowing
+multi-directional message sharing. It is designed to mimic the organization of postal systems. Made to be thread-safe using POSIX `semaphore.h`.
+
+## What is IPC (interprocess communication)
+"In computer science, interprocess communication (IPC) is the sharing of data between running processes in a computer system. Mechanisms for IPC may be provided by an operating system. Applications which use IPC are often categorized as clients and servers, where the client requests data and the server responds to client requests. Many applications are both clients and servers, as commonly seen in distributed computing." - [Wikipedia/Inter-process Communication](https://en.wikipedia.org/wiki/Inter-process_communication)
 
 ## Setup
 Design the object you would like to share between processes. By default it is:

@@ -25,6 +25,7 @@ All of the aforementioned modifications should be made to `mailbox.h`.
 ## Usage
 To include the library add it to your source directory and add the header to your file with `#include "mailbox.h"`
 
+### Basic Functions
 To setup a Mailbox we need a local "post office". To create a post office we use the office initializer.
 ```c
 struct office * init_office(char * key, const unsigned int box_id);
@@ -36,12 +37,41 @@ To send a message we need the "post address" of the program we wish to send to, 
 int send_mail(struct office * of, const unsigned int box_id, M * mail);
 ```
 
-To check your mail you need your "post office" and "post address" of the current process. If the mailbox is empty you will recieve a `NULL` response, otherwise you will recieve a pointer to the message retrieved.
+To check your mail you need your "post office" and "post address" of the current process. If the mailbox is empty you will recieve a `NULL` response, otherwise you will recieve a pointer to the message retrieved. This only retrieves one message at a time.
 ```c
 M * check_mail(struct office * of, const unsigned int box_id);
 ```
 
-To see some samples of how this works in action, check `sample/`.
+### Simple Server and Client
+To wait for new mail for an unknown amount of time we can use:
+```c
+M * await_mail(struct office * of, const unsigned int box_id);
+```
+
+Having the ability to wait for mail without knowing when it will arrive allows us to create a server-client relationship. A simple server would look as follows:
+```c
+office * of;
+
+while (1) {
+    M * msg = await_mail(&of, 0);
+
+    if (msg != NULL) {
+        printf("%s\n", msg->msg_buff);
+    }
+}
+```
+
+While a client would be able to simply message the server at any point with:
+```c
+M * msg;
+office * of;
+
+send_mail(*of, 0, msg);
+```
+
+Because of how this library is setup you aren't limited to having one server and client, you could have processes acting as both to facilitate seamless mutli-directional communication between processes,
+
+To see some samples of this library working in action, check `sample/`.
 
 ## Error Codes
 | Code         | Int | Description                                                  |

@@ -21,12 +21,13 @@ Documentation: https://github.com/matthambrecht/Mailbox/blob/main/README.md
 
 // Error codes
 #define MB_SUCCESS 0
-#define MB_EMPTY 10
-#define MB_FULL 11
-#define MB_NOT_FOUND 12
-#define MB_MEM_ERR 13
-#define MB_BAD_ID 14
-#define MB_EEXIST 15
+#define MB_EMPTY -10
+#define MB_FULL -11
+#define MB_NOT_FOUND -12
+#define MB_MEM_ERR -13
+#define MB_BAD_ID -14
+#define MB_EEXIST -15
+#define MB_OFFICE_FULL -16
 
 // Config consts
 #define MAX_MB 24 // Max number of processes capable of having a mailbox
@@ -35,7 +36,7 @@ Documentation: https://github.com/matthambrecht/Mailbox/blob/main/README.md
 typedef struct {
     char msg_buff[256];
     size_t msg_len;
-} M; 
+} M;
 
 // Our distribution center types
 struct mailbox {
@@ -46,7 +47,7 @@ struct mailbox {
 };
 
 struct office {
-    char * key;
+    const char * key;
     unsigned int vacant[MAX_MB];
     sem_t mutex[MAX_MB];
     sem_t notif[MAX_MB];
@@ -66,8 +67,8 @@ int mb_full(struct mailbox * mb);
 int mb_empty(struct mailbox * mb);
 
 // office fn declarations
-struct office * connect(char * key, const unsigned int box_id);
-struct office * init_office(char * key, const unsigned int box_id);
+struct office * connect(const char * key);
+struct office * init_office(const char * key);
 void destroy_office(const char * key);
 int remove_mailbox(struct office * of, const unsigned int box_id);
 int add_mailbox(struct office * of, const unsigned int box_id);
@@ -133,8 +134,8 @@ int mb_full(struct mailbox * mb) {
 
 
 // Office state stuff
-struct office * connect(char * key, const unsigned int box_id) { // connect to existing
-    unsigned int fd;
+struct office * connect(const char * key) { // connect to existing
+    int fd;
     struct office * of;
 
     fd = shm_open(
@@ -154,14 +155,13 @@ struct office * connect(char * key, const unsigned int box_id) { // connect to e
     );
 
     check_perr(fd == -1);
-    add_mailbox(of, box_id);
 
     return of;
 }
 
 
-struct office * init_office(char * key, const unsigned int box_id) {
-    unsigned int fd;
+struct office * init_office(const char * key) {
+    int fd;
     struct office * of;
 
     fd = shm_open(
@@ -172,7 +172,7 @@ struct office * init_office(char * key, const unsigned int box_id) {
 
     if (fd == -1) {
         if (errno == EEXIST) { // office exists
-            return connect(key, box_id);
+            return connect(key);
         }
 
         check_perr(-1);
@@ -198,8 +198,6 @@ struct office * init_office(char * key, const unsigned int box_id) {
         sem_init(&of->mutex[i], 1, 1);
         of->vacant[i] = 1;
     }
-    
-    add_mailbox(of, box_id);
 
     return of;
 }
@@ -209,6 +207,15 @@ void destroy_office(const char * key) {
     shm_unlink(key);
 }
 
+int get_vacant(struct office * of) {
+    for (size_t i = 0; i < MAX_MB; i++) {
+        if (of->vacant[i]) {
+            return i;
+        }
+    }
+
+    return MB_OFFICE_FULL;
+}
 
 int remove_mailbox(struct office * of, const unsigned int box_id) {
     if (box_id >= MAX_MB) {
@@ -224,7 +231,7 @@ int remove_mailbox(struct office * of, const unsigned int box_id) {
     of->procs--;
     of->vacant[box_id] = 1;
 
-    if (of->procs) {
+    if (!of->procs) {
         destroy_office(of->key);
     }
 

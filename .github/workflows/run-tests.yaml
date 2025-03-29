@@ -1,0 +1,16 @@
+name: run-tests
+run-name: Library Unit Tests
+on: [push]
+jobs:
+  check-bats-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Unit Tests
+      - run: |
+          cd tests
+          make test
+      - name: Execute Unit Tests
+      - run: |
+          ./test
+          exit $?

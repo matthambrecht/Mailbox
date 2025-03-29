@@ -1,5 +1,9 @@
 /*
 mailbox.h - A Unix Shared Memory Mailing System for IPC
+
+Author: Matthew Hambrecht (https://github.com/matthambrecht)
+Version: v1.2.0
+Documentation: https://github.com/matthambrecht/Mailbox/blob/main/README.md
 */
 
 #ifndef MAILBOX_H

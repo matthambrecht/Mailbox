@@ -243,11 +243,11 @@ int send_mail(struct office * of, const unsigned int box_id, M * mail) {
 
 M * check_mail(struct office * of, const unsigned int box_id) {
     if (box_id >= MAX_MB) {
-        return MB_BAD_ID;
+        return NULL;
     }
     
     if (of->vacant[box_id]) {
-        return MB_NOT_FOUND;
+        return NULL;
     }
 
     sem_wait(&of->sem[box_id]);

@@ -1,16 +1,22 @@
 name: run-tests
 run-name: Library Unit Tests
-on: [push]
+on: 
+  workflow_dispatch:
+  pull_request:
 jobs:
-  check-bats-version:
+  run-unit-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install make
       - name: Compile Unit Tests
-      - run: |
+        run: |
           cd tests
           make test
       - name: Execute Unit Tests
-      - run: |
+        run: |
+          cd tests
           ./test
-          exit $?

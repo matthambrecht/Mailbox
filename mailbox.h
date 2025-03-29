@@ -43,7 +43,8 @@ struct mailbox {
 
 struct office {
     unsigned int vacant[MAX_MB];
-    sem_t sem[MAX_MB];
+    sem_t mutex[MAX_MB];
+    sem_t notif[MAX_MB];
     char buff[MAX_MB];
     struct mailbox mb[MAX_MB];
     size_t procs;
@@ -66,6 +67,7 @@ int rem_proc(struct office * of, const unsigned int box_id);
 int add_proc(struct office * of, const unsigned int box_id);
 int send_mail(struct office * of, const unsigned int box_id, M * mail);
 M * check_mail(struct office * of, const unsigned int box_id);
+M * await_mail(struct office * of, const unsigned int box_id);
 
 // Error handling stuff
 void check_perr(int fail) { // for errors something else caught
@@ -174,13 +176,10 @@ struct office * init_office(char * key, const unsigned int box_id) {
     );
 
     check_perr(of == MAP_FAILED);
-    check_perr(sem_init(
-        of->sem,
-        1,
-        0
-    ) == -1);
     
     for (int i = 0; i < MAX_MB; i++) { // init free vars
+        sem_init(&of->notif[i], 1, 0);
+        sem_init(&of->mutex[i], 1, 1);
         of->vacant[i] = 1;
     }
     
@@ -198,8 +197,8 @@ int rem_proc(struct office * of, const unsigned int box_id) {
         return MB_NOT_FOUND;
     }
 
-    sem_wait(&of->sem[box_id]);
-    sem_close(&of->sem[box_id]);
+    sem_wait(&of->mutex[box_id]);
+    sem_close(&of->mutex[box_id]);
     of->procs--;
     of->vacant[box_id] = 1;
 
@@ -216,7 +215,7 @@ int add_proc(struct office * of, const unsigned int box_id) {
     }
 
     struct mailbox mb = mb_init();
-    sem_init(&of->sem[box_id], 0, 1);
+    sem_init(&of->mutex[box_id], 0, 1);
     of->mb[box_id] = mb;
     of->procs++;
     of->vacant[box_id] = 0;
@@ -234,9 +233,10 @@ int send_mail(struct office * of, const unsigned int box_id, M * mail) {
         return MB_NOT_FOUND;
     }
 
-    sem_wait(&of->sem[box_id]);
+    sem_wait(&of->mutex[box_id]);
     int rv = mb_insert(&of->mb[box_id], mail);
-    sem_post(&of->sem[box_id]);
+    sem_post(&of->mutex[box_id]);
+    sem_post(&of->notif[box_id]);
 
     return rv;
 }
@@ -250,10 +250,28 @@ M * check_mail(struct office * of, const unsigned int box_id) {
         return NULL;
     }
 
-    sem_wait(&of->sem[box_id]);
+    sem_wait(&of->mutex[box_id]);
     M * out = mb_pop(&of->mb[box_id]);
-    sem_post(&of->sem[box_id]);
+    sem_post(&of->mutex[box_id]);
+
+    if (!mb_empty(&of->mb[box_id])) { // Keep semaphore state
+        sem_post(&of->notif[box_id]);
+    }
 
     return out;
+}
+
+M * await_mail(struct office * of, const unsigned int box_id) {
+    if (box_id >= MAX_MB) {
+        return NULL;
+    }
+    
+    if (of->vacant[box_id]) {
+        return NULL;
+    }
+
+    sem_wait(&of->notif[box_id]);
+
+    return check_mail(of, box_id);
 }
 #endif

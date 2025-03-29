@@ -3,7 +3,8 @@
 #include "../mailbox.h"
 
 int main() {
-    struct office *of = init_office("sample_mb", 3);
+    struct office *of = init_office("sample_mb");
+    add_mailbox(of, 3);
 
     for (int i = 0; i < MAX_Q_LEN; i++) {
         char msg[256];

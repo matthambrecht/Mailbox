@@ -30,11 +30,22 @@ To include the library add it to your source directory and add the header to you
 ### Basic Functions
 To setup a Mailbox we need a local "post office". To create a post office we use the office initializer.
 ```c
-struct office * init_office(char * key, const unsigned int box_id);
+struct office * init_office(char * key);
 ```
-The `key` is going to be the same amongst all programs and is how each process designates which memory store to share. The `box_id` you can think of as the unique post address for each program. It is how the programs know where to send to, and where they recieved a message from.
+The `key` is going to be the same amongst all programs and is how each process designates which memory store to share. We can think of this as our mailing hub where all mail is routed through. All processes that wish to use the shared memory will need to connect to the office prior to doing anything else.
 
-To send a message we need the "post address" of the program we wish to send to, a "post office" which was initialized in the prior step, and the actual "mail".
+The `box_id` you can think of as the unique post address for each program. It is how the programs know where to send to, and/or allows you to depict where they recieved a message from. To create a mailbox you will use the following function:
+```c
+int add_mailbox(struct office * of, const unsigned int box_id);
+```
+Processes are capable of sharing the same `box_id`, or even having multiple. It is up to the user to safely handle this to ensure messaging runs smoothly amongst processes, threads, etc.
+
+To quickly get the `box_id` of the next available mailbox there is the provided function:
+```c
+int get_vacant(struct office * of);
+```
+
+To send a message we need the "post address" of the program we wish to send to, our "post office" which was initialized in the prior step, and the actual "mail".
 ```c
 int send_mail(struct office * of, const unsigned int box_id, M * mail);
 ```
@@ -63,7 +74,8 @@ M * await_mail(struct office * of, const unsigned int box_id);
 
 Having the ability to wait for mail without knowing when it will arrive allows us to create a server-client relationship. A simple server would look as follows:
 ```c
-office * of;
+office * of = init_office("key");
+add_mailbox(&of, 0);
 
 while (1) {
     M * msg = await_mail(&of, 0);
@@ -77,7 +89,7 @@ while (1) {
 While a client would be able to simply message the server at any point with:
 ```c
 M * msg;
-office * of;
+office * of = init_office("key");
 
 send_mail(*of, 0, msg);
 ```
@@ -90,9 +102,10 @@ To see some samples of this library working in action, check `sample/`.
 | Code         | Int | Description                                                  |
 |--------------|-----|--------------------------------------------------------------|
 | MB_SUCCESS  | 0 | The intended task completed successfully.
-| MB_EMPTY     | 10  | The mailbox the process attempted to retrieve from is empty. |
-| MB_FULL      | 11  | The mailbox the process attempted to send to is full.        |
-| MB_NOT_FOUND | 12  | The mailbox with the provided ID doesn't exist.              |
-| MB_MEM_ERR   | 13  | An error occurred while setting up the Shared Memory.        |
-| MB_BAD_ID    | 14  | The provided ID is out of the allowed range.                 |
-| MB_EEXIST    | 15  | The mailbox the process attempted to create already exists.  |
+| MB_EMPTY     | -10  | The mailbox the process attempted to retrieve from is empty. |
+| MB_FULL      | -11  | The mailbox the process attempted to send to is full.        |
+| MB_NOT_FOUND | -12  | The mailbox with the provided ID doesn't exist.              |
+| MB_MEM_ERR   | -13  | An error occurred while setting up the Shared Memory.        |
+| MB_BAD_ID    | -14  | The provided ID is out of the allowed range.                 |
+| MB_EEXIST    | -15  | The mailbox the process attempted to create already exists.  |
+| MB_OFFICE_FULL | -16 | We have reached the maximum number of allowed mailboxes |
